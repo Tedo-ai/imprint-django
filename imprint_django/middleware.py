@@ -1,10 +1,14 @@
 """Django middleware for Imprint tracing."""
 
+import logging
+
 import imprint
 from imprint import get_client
 from imprint.context import SpanContext
 
 from .setup import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class ImprintMiddleware:
@@ -36,11 +40,15 @@ class ImprintMiddleware:
 
         # If Imprint not initialized or disabled, pass through
         if client is None:
+            logger.debug("Imprint client is None, skipping tracing")
             return self.get_response(request)
 
         # Check if path should be ignored
         if client.config.should_ignore(request.path):
+            logger.debug(f"Ignoring path: {request.path}")
             return self.get_response(request)
+
+        logger.debug(f"Tracing request: {request.method} {request.path}")
 
         # Extract trace context from headers
         headers = {key: value for key, value in request.META.items() if key.startswith("HTTP_")}
