@@ -39,3 +39,8 @@ def setup_imprint():
     )
 
     imprint.init(config=config)
+
+    # Install database instrumentation
+    if settings.get("TRACE_DB", True):
+        from .db import install_query_wrapper
+        install_query_wrapper()
