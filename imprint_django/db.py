@@ -1,17 +1,50 @@
 """Database query instrumentation for Django."""
 
 import logging
-from contextlib import contextmanager
 
 from django.db import connection
-
-import imprint
 from imprint import get_client
 
 logger = logging.getLogger(__name__)
 
 # Maximum SQL length to store
 MAX_SQL_LENGTH = 2048
+
+# Internal queries to skip (Django ORM introspection, schema queries, etc.)
+SKIP_SQL_PREFIXES = (
+    "SAVEPOINT ",
+    "RELEASE SAVEPOINT ",
+    "SET ",
+    "SHOW ",
+    "SELECT version()",
+    "SELECT VERSION()",
+    # Django schema introspection
+    "SELECT c.relname",
+    "SELECT t.typname",
+    "SELECT pg_catalog.",
+    "SELECT information_schema.",
+    # SQLite introspection
+    "SELECT sqlite_version()",
+    "SELECT name FROM sqlite_master",
+    "PRAGMA ",
+)
+
+
+def _should_skip_query(sql: str) -> bool:
+    """Check if this query should be skipped (internal/schema queries)."""
+    sql_stripped = sql.strip()
+    sql_upper = sql_stripped.upper()
+
+    # Skip based on prefix
+    for prefix in SKIP_SQL_PREFIXES:
+        if sql_upper.startswith(prefix.upper()):
+            return True
+
+    # Skip EXPLAIN queries
+    if sql_upper.startswith("EXPLAIN"):
+        return True
+
+    return False
 
 
 class QueryWrapper:
@@ -20,6 +53,10 @@ class QueryWrapper:
     def __call__(self, execute, sql, params, many, context):
         client = get_client()
         if client is None:
+            return execute(sql, params, many, context)
+
+        # Skip internal/schema queries
+        if _should_skip_query(sql):
             return execute(sql, params, many, context)
 
         # Get database info
@@ -60,27 +97,22 @@ def _get_operation(sql: str) -> str:
     return "QUERY"
 
 
-_wrapper_installed = False
-
-
 def install_query_wrapper():
     """Install the query wrapper to instrument all database queries."""
-    global _wrapper_installed
-    if _wrapper_installed:
-        return
+    # Check if already installed (connection.execute_wrappers is thread-local)
+    for wrapper in connection.execute_wrappers:
+        if isinstance(wrapper, QueryWrapper):
+            return
 
     wrapper = QueryWrapper()
     connection.execute_wrappers.append(wrapper)
-    _wrapper_installed = True
     logger.debug("Imprint database instrumentation installed")
 
 
 def uninstall_query_wrapper():
     """Remove the query wrapper."""
-    global _wrapper_installed
     # Find and remove our wrapper
     connection.execute_wrappers = [
         w for w in connection.execute_wrappers
         if not isinstance(w, QueryWrapper)
     ]
-    _wrapper_installed = False

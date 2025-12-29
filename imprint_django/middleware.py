@@ -7,6 +7,7 @@ from imprint import get_client
 from imprint.context import SpanContext
 
 from .setup import get_settings
+from .db import install_query_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ class ImprintMiddleware:
         return self._settings
 
     def __call__(self, request):
+        # Ensure DB wrapper is installed (thread-local, needs to be done per-thread)
+        install_query_wrapper()
+
         client = get_client()
 
         # If Imprint not initialized or disabled, pass through
@@ -111,9 +115,41 @@ class ImprintMiddleware:
         span.set_attribute("code.function", view_name)
         span.set_attribute("code.namespace", module)
 
-        # Update span name to include view
-        # e.g., "GET /api/users/ (views.UserListView)"
-        span.name = f"{request.method} {request.path}"
+        # Extract route pattern (e.g., /products/<int:pk>/ instead of /products/123/)
+        route_pattern = self._extract_route_pattern(request)
+
+        # Update span name with route pattern for better aggregation
+        if route_pattern:
+            span.name = f"{request.method} {route_pattern}"
+            span.set_attribute("http.route", route_pattern)
+        else:
+            span.name = f"{request.method} {request.path}"
+
+        return None
+
+    def _extract_route_pattern(self, request):
+        """Extract the URL route pattern from the resolved URL."""
+        try:
+            from django.urls import resolve
+
+            resolved = resolve(request.path)
+
+            # Try to get the route pattern
+            if hasattr(resolved, 'route'):
+                # Django 2.0+ with path() - returns clean pattern
+                route = resolved.route
+                # Ensure leading slash
+                if route and not route.startswith('/'):
+                    route = '/' + route
+                return route
+
+            # Fallback: reconstruct from regex pattern (Django 1.x or url())
+            if hasattr(resolved, 'url_name') and resolved.url_name:
+                # At least record the URL name
+                return None
+
+        except Exception:
+            pass
 
         return None
 
