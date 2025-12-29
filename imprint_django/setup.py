@@ -3,6 +3,11 @@
 import imprint
 from imprint import Config
 
+# Default extensions to ignore
+DEFAULT_IGNORE_EXTENSIONS = [
+    ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".map"
+]
+
 
 def get_settings():
     """Get Imprint settings from Django settings."""
@@ -24,7 +29,7 @@ def setup_imprint():
         ingest_url=settings.get("INGEST_URL", "http://localhost:17080/v1/spans"),
         ignore_paths=settings.get("IGNORE_PATHS", []),
         ignore_prefixes=settings.get("IGNORE_PREFIXES", ["/static/", "/media/"]),
-        ignore_extensions=settings.get("IGNORE_EXTENSIONS", Config.ignore_extensions),
+        ignore_extensions=settings.get("IGNORE_EXTENSIONS", DEFAULT_IGNORE_EXTENSIONS),
         batch_size=settings.get("BATCH_SIZE", 100),
         flush_interval=settings.get("FLUSH_INTERVAL", 5.0),
         buffer_size=settings.get("BUFFER_SIZE", 1000),
