@@ -23,7 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "imprint-python>=0.1.0",
+    "imprint-python @ git+https://github.com/Tedo-ai/imprint-python.git",
     "django>=4.0",
 ]
 
