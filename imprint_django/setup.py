@@ -44,3 +44,8 @@ def setup_imprint():
     if settings.get("TRACE_DB", True):
         from .db import install_query_wrapper
         install_query_wrapper()
+
+    # Install Django-Q job tracing
+    if settings.get("TRACE_JOBS", True):
+        from .jobs import setup_django_q_tracing
+        setup_django_q_tracing()
